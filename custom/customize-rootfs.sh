@@ -97,19 +97,23 @@ install_v2raya() {
   curl -fsSL --retry 3 "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" -o /usr/local/share/xray/geoip.dat
   curl -fsSL --retry 3 "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" -o /usr/local/share/xray/geosite.dat
 
-  # v2rayA web client: URL resolved host-side (versioned deb name)
-  if [ -z "${V2RAYA_DEB_URL}" ]; then
-    echo "[skip] v2rayA deb URL not provided"
-    return 0
+  # v2rayA: official apt repo first, host-resolved deb URL as fallback
+  if ! dpkg -s v2raya >/dev/null 2>&1; then
+    echo "[*] v2rayA via apt.v2raya.org"
+    curl -fsSL --retry 3 "https://apt.v2raya.org/key/public-key.asc" -o /usr/share/keyrings/v2raya.asc
+    echo "deb [signed-by=/usr/share/keyrings/v2raya.asc] https://apt.v2raya.org greatwall main" >/etc/apt/sources.list.d/v2raya.list
+    apt-get update >/dev/null 2>&1 || true
+    apt-get install -y v2raya >/dev/null 2>&1 || true
   fi
-  echo "[*] v2rayA ${V2RAYA_DEB_URL}"
-  curl -fsSL --retry 3 "${V2RAYA_DEB_URL}" -o /tmp/v2raya.deb
-  # sanity check: a valid deb is several MB
-  if [ "$(stat -c%s /tmp/v2raya.deb 2>/dev/null || echo 0)" -lt 1048576 ]; then
-    echo "[skip] v2rayA deb download invalid"; rm -f /tmp/v2raya.deb; return 0
+  if ! dpkg -s v2raya >/dev/null 2>&1 && [ -n "${V2RAYA_DEB_URL}" ]; then
+    echo "[*] v2rayA fallback: ${V2RAYA_DEB_URL}"
+    curl -fsSL --retry 3 "${V2RAYA_DEB_URL}" -o /tmp/v2raya.deb
+    if [ "$(stat -c%s /tmp/v2raya.deb 2>/dev/null || echo 0)" -lt 1048576 ]; then
+      echo "[skip] v2rayA deb download invalid"; rm -f /tmp/v2raya.deb; return 0
+    fi
+    apt-get install -y /tmp/v2raya.deb || dpkg -i /tmp/v2raya.deb || true
+    rm -f /tmp/v2raya.deb
   fi
-  apt-get install -y /tmp/v2raya.deb || dpkg -i /tmp/v2raya.deb || true
-  rm -f /tmp/v2raya.deb
   systemctl enable v2raya 2>/dev/null || true
 }
 
@@ -165,6 +169,7 @@ proxychains4 smbclient enum4linux onesixtyone seclists pwntools theharvester sub
   [ -d /opt/Responder ] && echo "  [ok] Responder (/opt/Responder)" || echo "  [--] Responder"
   python3 -c "import impacket" 2>/dev/null && echo "  [ok] impacket (python)" || echo "  [--] impacket (python)"
   [ -x /usr/local/bin/xray ] && echo "  [ok] xray (/usr/local/bin/xray)" || echo "  [--] xray"
+  ls /usr/local/bin/impacket-* >/dev/null 2>&1 && echo "  [ok] impacket CLI tools" || echo "  [--] impacket CLI tools"
   dpkg -s v2raya >/dev/null 2>&1 && echo "  [ok] v2raya (deb)" || echo "  [--] v2raya"
   df -h / | tail -n 1
 fi

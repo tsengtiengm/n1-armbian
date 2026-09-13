@@ -136,6 +136,9 @@ jobs:
           # token: anonymous api.github.com calls from runner IPs hit 403 quotas
           V2RAYA_DEB_URL="$(curl -fsSL -H "Authorization: token ${GH_TOKEN}" https://api.github.com/repos/v2rayA/v2rayA/releases/latest | python3 -c 'import json,sys; assets=json.load(sys.stdin)["assets"]; print(next(a["browser_download_url"] for a in assets if a["name"].startswith("installer_debian_arm64") and a["name"].endswith(".deb")))')"
           echo "V2RAYA_DEB_URL=${V2RAYA_DEB_URL}" >> "${GITHUB_ENV}"
+          # make it visible to the rest of THIS step too (GITHUB_ENV only
+          # affects subsequent steps)
+          export V2RAYA_DEB_URL
           cd amlogic-s9xxx-armbian/build/output/images
           # ophub rebuild already gzip-compresses the result; unpack it first
           gz="$(ls *s905d*.img.gz 2>/dev/null | head -n 1 || true)"
