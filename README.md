@@ -9,7 +9,7 @@
 - **ophub 稳定版内核**（默认 6.12.y，可选 5.10/5.15/6.1/6.6）
 - 两种配方（workflow 里 `profile` 选择）：
   - **base**：精简底座 —— `python3`(pip/venv) + `rustc/cargo` + `metasploit-framework`（含 PostgreSQL）+ 编译工具链
-  - **pentest**（默认）：base 之上再加常见渗透工具与 v2rayA：
+  - **pentest**（默认）：base 之上再加常见渗透工具与 v2rayA（**不含 msf**，8G eMMC 空间有限；要 msf 请用 base 配方）：
     - 侦察/扫描：`nmap` `masscan` `whatweb` `nikto` `wafw00f` `gobuster` `ffuf` `dirb` `dirsearch` `wfuzz` `fierce` `dnsrecon` `dnsenum` 等
     - 爆破/破解：`hydra` `john` `hashcat`
     - 无线：`aircrack-ng`
@@ -31,7 +31,7 @@
    | `profile` | 配方：`base`（精简）/ `pentest`（渗透全家桶 + v2rayA） | pentest |
    | `kernel` | 内核分支（ophub stable 通道） | 6.12.y |
    | `root_mb` | rootfs 分区大小 MiB（pentest 建议 ≥ 6144） | 6144 |
-   | `install_msf` | 是否内置 Metasploit | true |
+   | `install_msf` | 是否内置 Metasploit（pentest 配方强制关闭） | true |
    | `upload_release` | 是否发布到 Releases | true |
 
    源镜像自动选择 Armbian 官方仓库里最新的 **minimal 精简版**（无桌面），无需手动指定系统版本。

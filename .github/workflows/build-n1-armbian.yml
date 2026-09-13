@@ -27,7 +27,7 @@ on:
         required: false
         default: "6656"
       install_msf:
-        description: "Install Metasploit Framework into image"
+        description: "Install Metasploit Framework (forced off in pentest profile)"
         required: false
         default: true
         type: boolean

@@ -11,6 +11,11 @@ PROFILE="${2:-base}"
 export DEBIAN_FRONTEND=noninteractive
 export LANG=C.UTF-8
 
+if [[ "${PROFILE}" == "pentest" && "${INSTALL_MSF}" == "true" ]]; then
+  echo "[*] pentest profile: metasploit disabled (disk budget on 8G eMMC)"
+  INSTALL_MSF="false"
+fi
+
 echo "[*] skip docs/man/locale for newly installed packages"
 cat > /etc/dpkg/dpkg.cfg.d/01-tiny <<'EOF'
 path-exclude=/usr/share/doc/*
@@ -144,6 +149,14 @@ proxychains4 smbclient enum4linux onesixtyone seclists pwntools theharvester sub
   echo "[*] seclists"
   [ -d /usr/share/seclists ] || git clone --depth=1 https://github.com/danielmiessler/SecLists /usr/share/seclists 2>/dev/null || true
 
+  echo "[*] exploitdb / searchsploit (gitlab)"
+  if ! command -v searchsploit >/dev/null 2>&1; then
+    git clone --depth=1 https://gitlab.com/exploit-database/exploitdb /usr/share/exploitdb 2>/dev/null || true
+    if [ -f /usr/share/exploitdb/searchsploit ]; then
+      ln -sf /usr/share/exploitdb/searchsploit /usr/local/bin/searchsploit
+    fi
+  fi
+
   echo "[*] v2rayA + Xray-core"
   install_v2raya || true
 
@@ -155,7 +168,7 @@ proxychains4 smbclient enum4linux onesixtyone seclists pwntools theharvester sub
 
   echo "[*] pentest tool inventory:"
   for t in nmap masscan hydra john hashcat sqlmap nikto gobuster ffuf aircrack-ng \
-           hping3 impacket-smbclient responder.py v2raya xray; do
+           hping3 searchsploit impacket-smbclient responder.py v2raya xray; do
     command -v "${t}" >/dev/null 2>&1 && echo "  [ok] ${t}" || echo "  [--] ${t} (not installed)"
   done
   df -h / | tail -n 1
