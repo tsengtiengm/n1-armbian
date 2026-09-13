@@ -114,7 +114,18 @@ jobs:
       - name: Customize rootfs (python / rust / metasploit)
         run: |
           set -e
+          cd amlogic-s9xxx-armbian/build/output/images
+          # ophub rebuild already gzip-compresses the result; unpack it first
+          gz="$(ls *s905d*.img.gz 2>/dev/null | head -n 1 || true)"
+          if [ -n "${gz}" ]; then
+            echo "Decompressing ophub output: ${gz}"
+            gunzip -kf "${gz}"
+          fi
+          # free the no-longer-needed source image
+          rm -f *-trunk_*.img
+          cd - >/dev/null
           img="$(ls amlogic-s9xxx-armbian/build/output/images/*s905d*.img | head -n 1)"
+          [ -n "${img}" ] || { echo "no rebuilt s905d image found"; exit 1; }
           echo "Customizing: ${img}"
           bash scripts/customize-image.sh "${img}" "${{ inputs.install_msf }}"
 
@@ -123,6 +134,8 @@ jobs:
         run: |
           set -e
           img="$(ls *s905d*.img | head -n 1)"
+          # drop ophub's .gz and the plain .img after xz to keep only the final artifact
+          rm -f *.img.gz
           xz -T0 -1 -k "${img}"
           sha256sum "${img}.xz" > sha256sums.txt
           ls -lh
