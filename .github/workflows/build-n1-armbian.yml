@@ -1,0 +1,156 @@
+name: Build N1 Armbian (s905d)
+
+on:
+  workflow_dispatch:
+    inputs:
+      os_release:
+        description: "Armbian base OS codename"
+        required: false
+        default: "noble"
+        type: choice
+        options:
+          - noble
+          - bookworm
+          - trixie
+      kernel:
+        description: "Kernel branch (ophub/kernel stable)"
+        required: false
+        default: "6.12.y"
+        type: choice
+        options:
+          - "6.12.y"
+          - "6.6.y"
+          - "6.1.y"
+          - "5.15.y"
+          - "5.10.y"
+      root_mb:
+        description: "Rootfs partition size in MiB (>= 2048)"
+        required: false
+        default: "4096"
+      install_msf:
+        description: "Install Metasploit Framework into image"
+        required: false
+        default: true
+        type: boolean
+      upload_release:
+        description: "Also publish image to Releases"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  TZ: "Etc/UTC"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # aarch64 runner: native chroot, no qemu emulation (public repos get these for free).
+    # If the repo is private, switch to ubuntu-24.04; scripts auto-fall back to qemu (slower).
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 350
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghc 2>/dev/null || true
+          if [ -n "${AGENT_TOOLSDIRECTORY:-}" ]; then sudo rm -rf "${AGENT_TOOLSDIRECTORY}" 2>/dev/null || true; fi
+          sudo apt-get clean
+          df -h /
+
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y parted dosfstools e2fsprogs rsync xz-utils bzip2 \
+            unzip zip curl wget git ca-certificates binfmt-support || true
+          # only needed when running on a non-aarch64 runner
+          sudo apt-get install -y qemu-user-static || true
+          df -h /
+
+      - name: Clone ophub build tool
+        run: git clone --depth 1 https://github.com/ophub/amlogic-s9xxx-armbian
+
+      - name: Download source Armbian image (odroidn2 server)
+        working-directory: amlogic-s9xxx-armbian
+        run: |
+          set -e
+          mkdir -p build/output/images
+          cd build/output/images
+          release="${{ inputs.os_release }}"
+          site="https://armbian.tnahosting.net/dl/odroidn2/archive/"
+          name="$(curl -fsSL "${site}" | grep -oE "Armbian[^\"<>]*${release}[^\"<>]*server[^\"<>]*\.img\.xz" | head -n 1 || true)"
+          if [ -z "${name}" ]; then
+            name="$(curl -fsSL "${site}" | grep -oE "Armbian[^\"<>]*${release}[^\"<>]*\.img\.xz" | head -n 1 || true)"
+          fi
+          [ -n "${name}" ] || { echo "no suitable image found on ${site}"; exit 1; }
+          echo "Source image: ${name}"
+          curl -fsSL "${site}${name}" -o src.img.xz
+          xz -dk src.img.xz
+          # ophub rebuild globs *-trunk_*.img; normalize the filename
+          ver="$(echo "${name}" | grep -oE '[2-9][0-9]\.[0-9]{1,2}\.[0-9]{1,2}' | head -n 1 || true)"
+          [ -n "${ver}" ] || ver="1.0"
+          krn="$(echo "${name}" | grep -oE '[0-9]+\.[0-9]{1,2}\.[0-9]{1,3}' | grep -vx "${ver}" | head -n 1 || true)"
+          out="Armbian_${ver}-trunk_${release}_arm64_${krn}.img"
+          mv src.img "${out}"
+          rm -f src.img.xz
+          echo "BUILD_TAG=Armbian_n1_${release}_$(date +%Y.%m)" >> "${GITHUB_ENV}"
+          ls -lh
+
+      - name: Rebuild for s905d (N1)
+        working-directory: amlogic-s9xxx-armbian
+        run: |
+          set -e
+          sudo ./rebuild -b s905d -k "${{ inputs.kernel }}" -a true -u stable -r ophub/kernel \
+            -t ext4 -s 512/${{ inputs.root_mb }} -n ophub
+          ls -lh build/output/images/
+
+      - name: Customize rootfs (python / rust / metasploit)
+        run: |
+          set -e
+          img="$(ls amlogic-s9xxx-armbian/build/output/images/*s905d*.img | head -n 1)"
+          echo "Customizing: ${img}"
+          bash scripts/customize-image.sh "${img}" "${{ inputs.install_msf }}"
+
+      - name: Compress and checksum
+        working-directory: amlogic-s9xxx-armbian/build/output/images
+        run: |
+          set -e
+          img="$(ls *s905d*.img | head -n 1)"
+          xz -T0 -1 -k "${img}"
+          sha256sum "${img}.xz" > sha256sums.txt
+          ls -lh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: armbian-n1-s905d-${{ inputs.os_release }}
+          path: |
+            amlogic-s9xxx-armbian/build/output/images/*.img.xz
+            amlogic-s9xxx-armbian/build/output/images/sha256sums.txt
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload to Releases
+        if: ${{ inputs.upload_release }}
+        uses: ophub/upload-to-releases@main
+        with:
+          tag: ${{ env.BUILD_TAG }}
+          artifacts: "amlogic-s9xxx-armbian/build/output/images/*.img.xz,amlogic-s9xxx-armbian/build/output/images/sha256sums.txt"
+          allow_updates: true
+          replaces_artifacts: true
+          make_latest: true
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ### N1 (s905d) Armbian custom image
+            - Board: **s905d (Phicomm N1)**
+            - OS: Armbian **${{ inputs.os_release }}** (server, minimal)
+            - Kernel: **${{ inputs.kernel }}** (ophub/kernel stable)
+            - Built-in: python3 / rust / metasploit-framework
+            - Default login: `root` / `1234`
+            - Install to eMMC: boot from USB, then run `armbian-install`
