@@ -43,7 +43,26 @@ if [[ "${INSTALL_MSF}" == "true" ]]; then
   gem install bundler --no-document
   bundle config set --local without 'development test'
   bundle config set --local jobs "$(nproc)"
-  bundle install || { echo "[*] bundle install failed once, retrying"; sleep 10; bundle install; }
+
+  # Debian ships some gems (xmlrpc, ...) as apt packages with gemspecs, which
+  # confuses bundler's install phase ("Could not find X.gem for installation").
+  # Pre-install the known offender and auto-recover from the rest.
+  gem install xmlrpc --no-document || true
+  set +e
+  bundle_rc=1
+  for attempt in 1 2 3 4 5; do
+    out="$(bundle install 2>&1)"; bundle_rc=$?
+    echo "${out}" | tail -n 150
+    [ ${bundle_rc} -eq 0 ] && break
+    gem_file="$(echo "${out}" | grep -oE 'Could not find [a-zA-Z0-9_.-]+\.gem' | head -n 1 | sed -E 's/^Could not find //; s/\.gem$//')"
+    [ -n "${gem_file}" ] || break
+    gem_name="${gem_file%-*}"
+    gem_ver="${gem_file##*-}"
+    echo "[*] bundler stuck on ${gem_name}-${gem_ver}; pre-installing with gem"
+    gem install "${gem_name}" -v "${gem_ver}" --no-document || break
+  done
+  set -e
+  [ ${bundle_rc} -eq 0 ] || { echo "[!] bundle install failed"; exit 1; }
   for m in msfconsole msfdb msfrpc msfvenom msfupdate; do
     if [ -f "/opt/metasploit-framework/${m}" ]; then
       ln -sf "/opt/metasploit-framework/${m}" "/usr/local/bin/${m}"
