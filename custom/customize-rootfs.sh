@@ -8,6 +8,8 @@ set -euo pipefail
 
 INSTALL_MSF="${1:-true}"
 PROFILE="${2:-base}"
+XRAY_ZIP_URL="${3:-}"
+V2RAYA_DEB_URL="${4:-}"
 export DEBIAN_FRONTEND=noninteractive
 export LANG=C.UTF-8
 
@@ -83,37 +85,25 @@ fi
 # pentest profile: common pentest tools + v2rayA (Xray core, arm64)
 # ---------------------------------------------------------------------------
 install_v2raya() {
-  local api="https://api.github.com"
   mkdir -p /usr/local/share/xray
 
-  # Xray core (arm64): resolve the asset URL from the release metadata so
-  # renames never break this, then fetch geo data from a stable mirror.
-  local xrel xzip
-  xrel="$(curl -fsSL --retry 3 "${api}/repos/XTLS/Xray-core/releases/latest")"
-  xzip="$(echo "${xrel}" | python3 -c 'import json,sys
-assets = json.load(sys.stdin)["assets"]
-for a in assets:
-    if "linux-arm64" in a["name"] and a["name"].endswith(".zip"):
-        print(a["browser_download_url"]); break')"
-  [ -n "${xzip}" ] || { echo "[skip] xray arm64 asset not found"; return 0; }
-  echo "[*] Xray core asset: ${xzip}"
+  # Xray core (arm64): direct "latest" download URL, no api.github.com needed
+  # (anonymous API quotas are exhausted on shared runner IPs -> 403)
+  local xzip="https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-arm64-v8a.zip"
+  echo "[*] Xray core: ${xzip}"
   curl -fsSL --retry 3 "${xzip}" -o /tmp/xray.zip
   unzip -o /tmp/xray.zip xray -d /usr/local/bin/ >/dev/null && chmod +x /usr/local/bin/xray
   rm -f /tmp/xray.zip
   curl -fsSL --retry 3 "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" -o /usr/local/share/xray/geoip.dat
   curl -fsSL --retry 3 "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" -o /usr/local/share/xray/geosite.dat
 
-  # v2rayA web client (debian arm64 deb)
-  local vrel vdeb
-  vrel="$(curl -fsSL --retry 3 "${api}/repos/v2rayA/v2rayA/releases/latest")"
-  vdeb="$(echo "${vrel}" | python3 -c 'import json,sys
-assets = json.load(sys.stdin)["assets"]
-for a in assets:
-    if a["name"].startswith("installer_debian_arm64") and a["name"].endswith(".deb"):
-        print(a["browser_download_url"]); break')"
-  [ -n "${vdeb}" ] || { echo "[skip] v2rayA deb asset not found"; return 0; }
-  echo "[*] v2rayA ${vdeb}"
-  curl -fsSL --retry 3 "${vdeb}" -o /tmp/v2raya.deb
+  # v2rayA web client: URL resolved host-side (versioned deb name)
+  if [ -z "${V2RAYA_DEB_URL}" ]; then
+    echo "[skip] v2rayA deb URL not provided"
+    return 0
+  fi
+  echo "[*] v2rayA ${V2RAYA_DEB_URL}"
+  curl -fsSL --retry 3 "${V2RAYA_DEB_URL}" -o /tmp/v2raya.deb
   # sanity check: a valid deb is several MB
   if [ "$(stat -c%s /tmp/v2raya.deb 2>/dev/null || echo 0)" -lt 1048576 ]; then
     echo "[skip] v2rayA deb download invalid"; rm -f /tmp/v2raya.deb; return 0
@@ -168,9 +158,14 @@ proxychains4 smbclient enum4linux onesixtyone seclists pwntools theharvester sub
 
   echo "[*] pentest tool inventory:"
   for t in nmap masscan hydra john hashcat sqlmap nikto gobuster ffuf aircrack-ng \
-           hping3 searchsploit impacket-smbclient responder.py v2raya xray; do
+           hping3 searchsploit impacket-smbclient; do
     command -v "${t}" >/dev/null 2>&1 && echo "  [ok] ${t}" || echo "  [--] ${t} (not installed)"
   done
+  [ -d /usr/share/seclists ] && echo "  [ok] seclists (/usr/share/seclists)" || echo "  [--] seclists"
+  [ -d /opt/Responder ] && echo "  [ok] Responder (/opt/Responder)" || echo "  [--] Responder"
+  python3 -c "import impacket" 2>/dev/null && echo "  [ok] impacket (python)" || echo "  [--] impacket (python)"
+  [ -x /usr/local/bin/xray ] && echo "  [ok] xray (/usr/local/bin/xray)" || echo "  [--] xray"
+  dpkg -s v2raya >/dev/null 2>&1 && echo "  [ok] v2raya (deb)" || echo "  [--] v2raya"
   df -h / | tail -n 1
 fi
 

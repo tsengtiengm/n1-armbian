@@ -127,9 +127,18 @@ jobs:
             -t ext4 -s 256/${{ inputs.root_mb }} -n ophub
           ls -lh build/output/images/
 
-      - name: Customize rootfs (python / rust / metasploit)
+      - name: Customize rootfs (toolchain / tools)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
+          # resolve the versioned v2rayA deb URL host-side with an authenticated
+          # token: anonymous api.github.com calls from runner IPs hit 403 quotas
+          V2RAYA_DEB_URL="$(curl -fsSL -H "Authorization: token ${GH_TOKEN}" https://api.github.com/repos/v2rayA/v2rayA/releases/latest | python3 -c 'import json,sys
+for a in json.load(sys.stdin)["assets"]:
+    if a["name"].startswith("installer_debian_arm64") and a["name"].endswith(".deb"):
+        print(a["browser_download_url"]); break')"
+          echo "V2RAYA_DEB_URL=${V2RAYA_DEB_URL}" >> "${GITHUB_ENV}"
           cd amlogic-s9xxx-armbian/build/output/images
           # ophub rebuild already gzip-compresses the result; unpack it first
           gz="$(ls *s905d*.img.gz 2>/dev/null | head -n 1 || true)"
@@ -152,8 +161,12 @@ jobs:
           img="$(ls *s905d*.img | head -n 1)"
           # drop ophub's .gz and the plain .img after xz to keep only the final artifact
           rm -f *.img.gz
-          xz -T0 -1 -k "${img}"
+          # -9: the compressed image must stay under GitHub Releases' 2 GiB asset cap
+          xz -T0 -9 -k "${img}"
           sha256sum "${img}.xz" > sha256sums.txt
+          if [ "$(stat -c%s "${img}.xz")" -gt 2147483648 ]; then
+            echo "WARNING: ${img}.xz exceeds the 2 GiB Releases asset limit; it will only be available as an artifact"
+          fi
           ls -lh
 
       - name: Upload artifact

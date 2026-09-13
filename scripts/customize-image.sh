@@ -67,7 +67,7 @@ else
 fi
 
 sudo cp "${REPO_ROOT}/custom/customize-rootfs.sh" "${MNT}/tmp/customize-rootfs.sh"
-"${CHROOT_CMD[@]}" /tmp/customize-rootfs.sh "${INSTALL_MSF}" "${PROFILE}"
+"${CHROOT_CMD[@]}" /tmp/customize-rootfs.sh "${INSTALL_MSF}" "${PROFILE}" "${XRAY_ZIP_URL:-}" "${V2RAYA_DEB_URL:-}"
 
 # --- restore original resolver config ---
 if [[ "${host_arch}" != "aarch64" ]]; then
