@@ -47,10 +47,10 @@
 
 ## 常见问题
 
+- **本仓库是私有的**：固件下载需登录 GitHub；编译跑在 x86 云主机 + qemu 模拟上（较慢，计入每月 2000 分钟免费额度）。若转回公开仓库，把 workflow 里 `runs-on: ubuntu-24.04` 改成 `ubuntu-24.04-arm` 即可恢复原生编译（快很多且免费）
 - **msf 启动慢**：N1 只有 2G 内存 + eMMC 性能一般，`msfconsole` 首次加载 1~2 分钟属正常
 - **想换内核**：直接改 workflow 触发参数里的 `kernel` 即可，无需改代码
 - **想加装其他软件**：编辑 `custom/customize-rootfs.sh` 里的 `apt-get install` 列表后重新触发
-- **仓库转私有后**：免费 ARM 云主机不可用，把 workflow 里 `runs-on: ubuntu-24.04-arm` 改成 `ubuntu-24.04`（会自动退回 qemu 模拟编译，速度明显变慢，且计入 Actions 分钟数）
 - **默认 root 密码**：`1234`，首次登录强制修改；暴露公网请务必改强密码/禁用密码登录
 
 ## 目录结构

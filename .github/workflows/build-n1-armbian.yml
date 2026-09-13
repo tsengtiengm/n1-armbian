@@ -37,13 +37,20 @@ permissions:
 
 jobs:
   build:
-    # aarch64 runner: native chroot, no qemu emulation (public repos get these for free).
-    # If the repo is private, switch to ubuntu-24.04; scripts auto-fall back to qemu (slower).
-    runs-on: ubuntu-24.04-arm
+    # Private repo: free aarch64 runners are unavailable, use x86_64 + qemu
+    # emulation (scripts auto-detect and run the chroot through qemu-aarch64).
+    # On a public repo you can switch back to ubuntu-24.04-arm for native speed.
+    runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare qemu binfmt (x86_64 host only)
+        if: runner.arch == 'X64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
       - name: Free disk space
         run: |
