@@ -21,11 +21,12 @@
 
    | 参数 | 说明 | 默认 |
    |---|---|---|
-   | `os_release` | 基础系统：noble(Ubuntu 24.04) / bookworm(Debian 12) / trixie(Debian 13) | noble |
    | `kernel` | 内核分支（ophub stable 通道） | 6.12.y |
    | `root_mb` | rootfs 分区大小 MiB（装 msf 建议 ≥ 4096） | 4096 |
    | `install_msf` | 是否内置 Metasploit | true |
    | `upload_release` | 是否发布到 Releases | true |
+
+   源镜像自动选择 Armbian 官方仓库里最新的 **minimal 精简版**（无桌面），无需手动指定系统版本。
 
 3. 等待约 40~90 分钟（公有仓库免费 ARM 云主机原生编译）
 4. 到 **Releases** 下载 `.img.xz` 固件（同 run 的 Artifacts 里也有备份）

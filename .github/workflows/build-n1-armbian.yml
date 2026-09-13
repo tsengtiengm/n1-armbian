@@ -3,15 +3,6 @@ name: Build N1 Armbian (s905d)
 on:
   workflow_dispatch:
     inputs:
-      os_release:
-        description: "Armbian base OS codename"
-        required: false
-        default: "noble"
-        type: choice
-        options:
-          - noble
-          - bookworm
-          - trixie
       kernel:
         description: "Kernel branch (ophub/kernel stable)"
         required: false
@@ -75,30 +66,41 @@ jobs:
       - name: Clone ophub build tool
         run: git clone --depth 1 https://github.com/ophub/amlogic-s9xxx-armbian
 
-      - name: Download source Armbian image (odroidn2 server)
+      - name: Download source Armbian image (newest minimal from odroidn2 archive)
         working-directory: amlogic-s9xxx-armbian
         run: |
           set -e
           mkdir -p build/output/images
           cd build/output/images
-          release="${{ inputs.os_release }}"
-          site="https://armbian.tnahosting.net/dl/odroidn2/archive/"
-          name="$(curl -fsSL "${site}" | grep -oE "Armbian[^\"<>]*${release}[^\"<>]*server[^\"<>]*\.img\.xz" | head -n 1 || true)"
-          if [ -z "${name}" ]; then
-            name="$(curl -fsSL "${site}" | grep -oE "Armbian[^\"<>]*${release}[^\"<>]*\.img\.xz" | head -n 1 || true)"
-          fi
-          [ -n "${name}" ] || { echo "no suitable image found on ${site}"; exit 1; }
-          echo "Source image: ${name}"
+          sites=(
+            "https://armbian.tnahosting.net/dl/odroidn2/archive/"
+            "https://imola.armbian.com/dl/odroidn2/archive/"
+          )
+          name=""
+          for site in "${sites[@]}"; do
+            listing="$(curl -fsSL --connect-timeout 15 "${site}" | grep -oE 'Armbian[^"<>]*\.img\.xz' | sort -u || true)"
+            if [ -n "${listing}" ]; then
+              name="$(echo "${listing}" | grep -i minimal | sort -rV | head -n 1 || true)"
+              [ -z "${name}" ] && name="$(echo "${listing}" | grep -i server | sort -rV | head -n 1 || true)"
+              [ -z "${name}" ] && name="$(echo "${listing}" | grep -vi desktop | sort -rV | head -n 1 || true)"
+              [ -z "${name}" ] && name="$(echo "${listing}" | sort -rV | head -n 1)"
+              echo "Selected source image from ${site}: ${name}"
+              break
+            fi
+          done
+          [ -n "${name}" ] || { echo "no suitable image found"; exit 1; }
           curl -fsSL "${site}${name}" -o src.img.xz
           xz -dk src.img.xz
-          # ophub rebuild globs *-trunk_*.img; normalize the filename
+          codename="$(echo "${name}" | grep -oE '(resolute|questing|plucky|noble|trixie|bookworm|bullseye|jammy)' | head -n 1 || true)"
+          [ -n "${codename}" ] || codename="custom"
           ver="$(echo "${name}" | grep -oE '[2-9][0-9]\.[0-9]{1,2}\.[0-9]{1,2}' | head -n 1 || true)"
           [ -n "${ver}" ] || ver="1.0"
           krn="$(echo "${name}" | grep -oE '[0-9]+\.[0-9]{1,2}\.[0-9]{1,3}' | grep -vx "${ver}" | head -n 1 || true)"
-          out="Armbian_${ver}-trunk_${release}_arm64_${krn}.img"
+          out="Armbian_${ver}-trunk_${codename}_arm64_${krn}.img"
           mv src.img "${out}"
           rm -f src.img.xz
-          echo "BUILD_TAG=Armbian_n1_${release}_$(date +%Y.%m)" >> "${GITHUB_ENV}"
+          echo "OS_CODENAME=${codename}" >> "${GITHUB_ENV}"
+          echo "BUILD_TAG=Armbian_n1_${codename}_$(date +%Y.%m)" >> "${GITHUB_ENV}"
           ls -lh
 
       - name: Rebuild for s905d (N1)
@@ -128,7 +130,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: armbian-n1-s905d-${{ inputs.os_release }}
+          name: armbian-n1-s905d-${{ env.OS_CODENAME }}
           path: |
             amlogic-s9xxx-armbian/build/output/images/*.img.xz
             amlogic-s9xxx-armbian/build/output/images/sha256sums.txt
@@ -149,7 +151,7 @@ jobs:
           body: |
             ### N1 (s905d) Armbian custom image
             - Board: **s905d (Phicomm N1)**
-            - OS: Armbian **${{ inputs.os_release }}** (server, minimal)
+            - OS: Armbian **${{ env.OS_CODENAME }}** (minimal, minimalistic)
             - Kernel: **${{ inputs.kernel }}** (ophub/kernel stable)
             - Built-in: python3 / rust / metasploit-framework
             - Default login: `root` / `1234`
