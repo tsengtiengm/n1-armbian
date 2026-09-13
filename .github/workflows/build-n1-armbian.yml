@@ -23,9 +23,9 @@ on:
           - "5.15.y"
           - "5.10.y"
       root_mb:
-        description: "Rootfs partition size in MiB (>= 2048; pentest profile needs >= 6144)"
+        description: "Rootfs partition size in MiB (>= 2048; pentest profile needs >= 6656)"
         required: false
-        default: "6144"
+        default: "6656"
       install_msf:
         description: "Install Metasploit Framework into image"
         required: false
@@ -122,8 +122,9 @@ jobs:
         working-directory: amlogic-s9xxx-armbian
         run: |
           set -e
+          # boot 256M keeps the whole image within the N1's 8G eMMC when rootfs is large
           sudo ./rebuild -b s905d -k "${{ inputs.kernel }}" -a true -u stable -r ophub/kernel \
-            -t ext4 -s 512/${{ inputs.root_mb }} -n ophub
+            -t ext4 -s 256/${{ inputs.root_mb }} -n ophub
           ls -lh build/output/images/
 
       - name: Customize rootfs (python / rust / metasploit)

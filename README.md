@@ -16,8 +16,9 @@
     - Web：`sqlmap` `sslscan` `testssl.sh`
     - 网络/中间人：`hping3` `macchanger` `tcpdump` `tshark` `socat` `proxychains4`（已预配置 socks5 → 127.0.0.1:20170）
     - 内网/SMB：`smbclient` `Responder`(`/opt/Responder`) `impacket`(pip) `enum4linux`
-    - 字典与漏洞库：`seclists`(`/usr/share/seclists`) `searchsploit`(exploitdb)
+    - 字典：`seclists`(`/usr/share/seclists`)
     - 科学上网：**v2rayA** + **Xray-Core**(arm64) + geoip/geosite，开机自启，web 面板 `http://<N1的IP>:2017`
+    - 注：8G eMMC 容量有限，searchsploit/exploitdb 未内置（msf 自带漏洞库）；需要的话在 `custom/customize-rootfs.sh` 里自行添加
 - 已做精简：排除文档/手册/多余语言包，`--no-install-recommends` 安装
 
 ## 使用方法
