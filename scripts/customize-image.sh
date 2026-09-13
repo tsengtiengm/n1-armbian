@@ -3,11 +3,12 @@
 # customization script. Works natively on aarch64 runners; on x86_64 runners it
 # transparently uses qemu-aarch64-static (binfmt must be registered).
 #
-# Usage: bash scripts/customize-image.sh <image.img> <install_msf:true|false>
+# Usage: bash scripts/customize-image.sh <image.img> <install_msf:true|false> <profile:base|pentest>
 set -euo pipefail
 
-IMG="${1:?usage: customize-image.sh <image.img> <install_msf>}"
+IMG="${1:?usage: customize-image.sh <image.img> <install_msf> <profile>}"
 INSTALL_MSF="${2:-true}"
+PROFILE="${3:-base}"
 MNT=/mnt/n1root
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -66,7 +67,7 @@ else
 fi
 
 sudo cp "${REPO_ROOT}/custom/customize-rootfs.sh" "${MNT}/tmp/customize-rootfs.sh"
-"${CHROOT_CMD[@]}" /tmp/customize-rootfs.sh "${INSTALL_MSF}"
+"${CHROOT_CMD[@]}" /tmp/customize-rootfs.sh "${INSTALL_MSF}" "${PROFILE}"
 
 # --- restore original resolver config ---
 if [[ "${host_arch}" != "aarch64" ]]; then

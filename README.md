@@ -5,13 +5,19 @@
 
 ## 固件特性
 
-- **Armbian stable**（server 精简版，无桌面），基于官方 Armbian 源镜像重建
+- **Armbian stable**（minimal 精简版，无桌面），基于官方 Armbian 源镜像重建
 - **ophub 稳定版内核**（默认 6.12.y，可选 5.10/5.15/6.1/6.6）
-- 内置：
-  - `python3` + `pip` + `venv`
-  - `rustc` + `cargo`（发行版稳定版本）
-  - `metasploit-framework`（msfconsole / msfvenom / msfdb 等，含 PostgreSQL）
-  - `build-essential` 编译工具链（rust/内核头编译需要）
+- 两种配方（workflow 里 `profile` 选择）：
+  - **base**：精简底座 —— `python3`(pip/venv) + `rustc/cargo` + `metasploit-framework`（含 PostgreSQL）+ 编译工具链
+  - **pentest**（默认）：base 之上再加常见渗透工具与 v2rayA：
+    - 侦察/扫描：`nmap` `masscan` `whatweb` `nikto` `wafw00f` `gobuster` `ffuf` `dirb` `dirsearch` `wfuzz` `fierce` `dnsrecon` `dnsenum` 等
+    - 爆破/破解：`hydra` `john` `hashcat`
+    - 无线：`aircrack-ng`
+    - Web：`sqlmap` `sslscan` `testssl.sh`
+    - 网络/中间人：`hping3` `macchanger` `tcpdump` `tshark` `socat` `proxychains4`（已预配置 socks5 → 127.0.0.1:20170）
+    - 内网/SMB：`smbclient` `Responder`(`/opt/Responder`) `impacket`(pip) `enum4linux`
+    - 字典与漏洞库：`seclists`(`/usr/share/seclists`) `searchsploit`(exploitdb)
+    - 科学上网：**v2rayA** + **Xray-Core**(arm64) + geoip/geosite，开机自启，web 面板 `http://<N1的IP>:2017`
 - 已做精简：排除文档/手册/多余语言包，`--no-install-recommends` 安装
 
 ## 使用方法
@@ -21,8 +27,9 @@
 
    | 参数 | 说明 | 默认 |
    |---|---|---|
+   | `profile` | 配方：`base`（精简）/ `pentest`（渗透全家桶 + v2rayA） | pentest |
    | `kernel` | 内核分支（ophub stable 通道） | 6.12.y |
-   | `root_mb` | rootfs 分区大小 MiB（装 msf 建议 ≥ 4096） | 4096 |
+   | `root_mb` | rootfs 分区大小 MiB（pentest 建议 ≥ 6144） | 6144 |
    | `install_msf` | 是否内置 Metasploit | true |
    | `upload_release` | 是否发布到 Releases | true |
 

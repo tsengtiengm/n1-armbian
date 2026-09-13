@@ -3,6 +3,14 @@ name: Build N1 Armbian (s905d)
 on:
   workflow_dispatch:
     inputs:
+      profile:
+        description: "Image profile: base = minimal, pentest = pentest tools + v2rayA"
+        required: false
+        default: "pentest"
+        type: choice
+        options:
+          - base
+          - pentest
       kernel:
         description: "Kernel branch (ophub/kernel stable)"
         required: false
@@ -15,9 +23,9 @@ on:
           - "5.15.y"
           - "5.10.y"
       root_mb:
-        description: "Rootfs partition size in MiB (>= 2048)"
+        description: "Rootfs partition size in MiB (>= 2048; pentest profile needs >= 6144)"
         required: false
-        default: "5120"
+        default: "6144"
       install_msf:
         description: "Install Metasploit Framework into image"
         required: false
@@ -107,7 +115,7 @@ jobs:
           mv src.img "${out}"
           rm -f src.img.xz
           echo "OS_CODENAME=${codename}" >> "${GITHUB_ENV}"
-          echo "BUILD_TAG=Armbian_n1_${codename}_$(date +%Y.%m)" >> "${GITHUB_ENV}"
+          echo "BUILD_TAG=Armbian_n1_${{ inputs.profile }}_${codename}_$(date +%Y.%m)" >> "${GITHUB_ENV}"
           ls -lh
 
       - name: Rebuild for s905d (N1)
@@ -134,7 +142,7 @@ jobs:
           img="$(ls amlogic-s9xxx-armbian/build/output/images/*s905d*.img | head -n 1)"
           [ -n "${img}" ] || { echo "no rebuilt s905d image found"; exit 1; }
           echo "Customizing: ${img}"
-          bash scripts/customize-image.sh "${img}" "${{ inputs.install_msf }}"
+          bash scripts/customize-image.sh "${img}" "${{ inputs.install_msf }}" "${{ inputs.profile }}"
 
       - name: Compress and checksum
         working-directory: amlogic-s9xxx-armbian/build/output/images
@@ -150,7 +158,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: armbian-n1-s905d-${{ env.OS_CODENAME }}
+          name: armbian-n1-s905d-${{ inputs.profile }}-${{ env.OS_CODENAME }}
           path: |
             amlogic-s9xxx-armbian/build/output/images/*.img.xz
             amlogic-s9xxx-armbian/build/output/images/sha256sums.txt
@@ -171,8 +179,11 @@ jobs:
           body: |
             ### N1 (s905d) Armbian custom image
             - Board: **s905d (Phicomm N1)**
+            - Profile: **${{ inputs.profile }}**
             - OS: Armbian **${{ env.OS_CODENAME }}** (minimal, minimalistic)
             - Kernel: **${{ inputs.kernel }}** (ophub/kernel stable)
             - Built-in: python3 / rust / metasploit-framework
+            - pentest profile adds: nmap, hydra, john, hashcat, sqlmap, aircrack-ng, seclists, searchsploit, Responder, impacket, v2rayA + Xray-core, ...
             - Default login: `root` / `1234`
             - Install to eMMC: boot from USB, then run `armbian-install`
+            - v2rayA web UI: `http://<n1-ip>:2017` (proxychains4 preset to local socks5 20170)
