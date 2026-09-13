@@ -133,6 +133,16 @@ proxychains4 smbclient enum4linux onesixtyone seclists pwntools theharvester sub
 
   echo "[*] python attack libs (impacket)"
   pip3 install --break-system-packages --no-cache-dir impacket || true
+  # pip wheels ship the examples as modules but no CLI entry points; create
+  # impacket-* wrappers so secretsdump/wmiexec/... are runnable directly
+  exdir="$(python3 -c 'import impacket, os; print(os.path.join(os.path.dirname(impacket.__file__), "examples"))' 2>/dev/null || true)"
+  if [ -n "${exdir}" ] && [ -d "${exdir}" ]; then
+    for f in "${exdir}"/*.py; do
+      b="impacket-$(basename "${f}" .py)"
+      printf '#!/bin/sh\nexec python3 "%s" "$@"\n' "${f}" > "/usr/local/bin/${b}"
+      chmod +x "/usr/local/bin/${b}"
+    done
+  fi
 
   # free the apt deb cache early: the big git clones below need the headroom
   apt-get clean
