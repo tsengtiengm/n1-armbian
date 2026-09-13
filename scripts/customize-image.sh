@@ -35,13 +35,25 @@ trap cleanup EXIT
 sudo mkdir -p "${MNT}"
 sudo mount "${loop}p2" "${MNT}"
 
-# resolv.conf inside the image is usually a symlink to systemd-resolved's stub;
-# point it at a static resolver for the chroot and restore afterwards.
-restore_resolv=0
+# --- resolver fix for chroot ---
+# The image's /etc/resolv.conf may be a dangling symlink or a stale mount point,
+# and its nsswitch.conf may reference systemd nss modules that are unusable in a
+# plain chroot (observed: getaddrinfo EBUSY). Use the host's working resolver
+# for the duration of the chroot, then restore the originals.
+resolv_kind="none"
 if sudo test -L "${MNT}/etc/resolv.conf"; then
+  resolv_kind="symlink"
   resolv_target="$(sudo readlink "${MNT}/etc/resolv.conf")"
-  echo "nameserver 8.8.8.8" | sudo tee "${MNT}/etc/resolv.conf" >/dev/null
-  restore_resolv=1
+elif sudo test -f "${MNT}/etc/resolv.conf"; then
+  resolv_kind="file"
+  sudo cp "${MNT}/etc/resolv.conf" /tmp/n1-resolv.orig
+fi
+sudo umount "${MNT}/etc/resolv.conf" 2>/dev/null || true
+sudo rm -f "${MNT}/etc/resolv.conf"
+sudo cp /etc/resolv.conf "${MNT}/etc/resolv.conf"
+if sudo test -f "${MNT}/etc/nsswitch.conf"; then
+  sudo cp "${MNT}/etc/nsswitch.conf" /tmp/n1-nsswitch.orig
+  sudo sed -i -E 's/^hosts:.*/hosts: files dns/' "${MNT}/etc/nsswitch.conf"
 fi
 
 for d in proc sys dev dev/pts; do sudo mount --bind "/${d}" "${MNT}/${d}"; done
@@ -56,13 +68,19 @@ fi
 sudo cp "${REPO_ROOT}/custom/customize-rootfs.sh" "${MNT}/tmp/customize-rootfs.sh"
 "${CHROOT_CMD[@]}" /tmp/customize-rootfs.sh "${INSTALL_MSF}"
 
-sudo rm -f "${MNT}/tmp/customize-rootfs.sh"
+# --- restore original resolver config ---
 if [[ "${host_arch}" != "aarch64" ]]; then
   sudo rm -f "${MNT}/usr/bin/qemu-aarch64-static"
 fi
-if [[ "${restore_resolv}" == "1" ]]; then
-  sudo rm -f "${MNT}/etc/resolv.conf"
-  sudo ln -sf "${resolv_target}" "${MNT}/etc/resolv.conf"
+sudo rm -f "${MNT}/etc/resolv.conf"
+case "${resolv_kind}" in
+  symlink) sudo ln -sf "${resolv_target}" "${MNT}/etc/resolv.conf" ;;
+  file)    sudo cp /tmp/n1-resolv.orig "${MNT}/etc/resolv.conf" ;;
+esac
+if sudo test -f /tmp/n1-nsswitch.orig; then
+  sudo cp /tmp/n1-nsswitch.orig "${MNT}/etc/nsswitch.conf"
 fi
+
+sudo rm -f "${MNT}/tmp/customize-rootfs.sh"
 
 echo "[+] image customized: ${IMG}"

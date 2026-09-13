@@ -43,7 +43,7 @@ if [[ "${INSTALL_MSF}" == "true" ]]; then
   gem install bundler --no-document
   bundle config set --local without 'development test'
   bundle config set --local jobs "$(nproc)"
-  bundle install
+  bundle install || { echo "[*] bundle install failed once, retrying"; sleep 10; bundle install; }
   for m in msfconsole msfdb msfrpc msfvenom msfupdate; do
     if [ -f "/opt/metasploit-framework/${m}" ]; then
       ln -sf "/opt/metasploit-framework/${m}" "/usr/local/bin/${m}"

@@ -17,7 +17,7 @@ on:
       root_mb:
         description: "Rootfs partition size in MiB (>= 2048)"
         required: false
-        default: "4096"
+        default: "5120"
       install_msf:
         description: "Install Metasploit Framework into image"
         required: false
